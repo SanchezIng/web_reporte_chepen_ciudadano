@@ -24,8 +24,23 @@ export const apiCall = async (endpoint: string, options: RequestOptions = {}) =>
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: 'Unknown error' }));
-    throw new Error(error.error || 'API request failed');
+    let message = 'API request failed';
+    try {
+      const text = await response.text();
+      if (text) {
+        try {
+          const json = JSON.parse(text);
+          message = json.error || message;
+        } catch {
+          message = `${response.status} ${response.statusText}: ${text}`;
+        }
+      } else {
+        message = `${response.status} ${response.statusText}`;
+      }
+    } catch {
+      message = `${response.status} ${response.statusText}`;
+    }
+    throw new Error(message);
   }
 
   return response.json();
