@@ -74,11 +74,15 @@ router.post('/', authMiddleware, async (req: AuthRequest, res) => {
     const conn = await pool.getConnection();
 
     const id = uuidv4();
-    const now = new Date().toISOString();
+    const toMySQLDateTime = (d: any) => {
+      const date = typeof d === 'string' || typeof d === 'number' ? new Date(d) : d;
+      const pad = (n: number) => String(n).padStart(2, '0');
+      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+    };
 
     await conn.execute(
       `INSERT INTO incidents (id, user_id, category_id, title, description, latitude, longitude, address, status, priority, incident_date, created_at, updated_at, deleted_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), NULL)`,
       [
         id,
         req.user?.id,
@@ -90,9 +94,7 @@ router.post('/', authMiddleware, async (req: AuthRequest, res) => {
         address || null,
         'pending',
         priority || 'medium',
-        incident_date,
-        now,
-        now,
+        toMySQLDateTime(incident_date),
       ]
     );
 
@@ -127,22 +129,19 @@ router.patch('/:id', authMiddleware, roleMiddleware(['authority']), async (req: 
     }
 
     const oldStatus = incident[0].status;
-    const now = new Date().toISOString();
 
     await conn.execute('START TRANSACTION');
 
     if (status) {
-      const resolved_at = status === 'resolved' || status === 'rejected' ? now : null;
       await conn.execute(
-        'UPDATE incidents SET status = ?, updated_at = ?, resolved_at = ?, resolved_by = ? WHERE id = ?',
-        [status, now, resolved_at, req.user?.id, req.params.id]
+        "UPDATE incidents SET status = ?, updated_at = NOW(), resolved_at = CASE WHEN ? IN ('resolved','rejected') THEN NOW() ELSE NULL END, resolved_by = ? WHERE id = ?",
+        [status, status, req.user?.id, req.params.id]
       );
     }
 
     if (priority) {
-      await conn.execute('UPDATE incidents SET priority = ?, updated_at = ? WHERE id = ?', [
+      await conn.execute('UPDATE incidents SET priority = ?, updated_at = NOW() WHERE id = ?', [
         priority,
-        now,
         req.params.id,
       ]);
     }
@@ -150,8 +149,8 @@ router.patch('/:id', authMiddleware, roleMiddleware(['authority']), async (req: 
     if (comment || status) {
       const updateId = uuidv4();
       await conn.execute(
-        'INSERT INTO incident_updates (id, incident_id, user_id, old_status, new_status, comment, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [updateId, req.params.id, req.user?.id, oldStatus, status || oldStatus, comment || null, now]
+        'INSERT INTO incident_updates (id, incident_id, user_id, old_status, new_status, comment, created_at) VALUES (?, ?, ?, ?, ?, ?, NOW())',
+        [updateId, req.params.id, req.user?.id, oldStatus, status || oldStatus, comment || null]
       );
     }
 

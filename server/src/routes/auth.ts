@@ -24,11 +24,10 @@ router.post('/register', async (req: Request, res: Response) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const id = uuidv4();
-    const now = new Date().toISOString();
 
     await conn.execute(
-      'INSERT INTO profiles (id, email, password_hash, full_name, phone, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [id, email, hashedPassword, full_name, phone || null, role || 'citizen', now, now]
+      'INSERT INTO profiles (id, email, password_hash, full_name, phone, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())',
+      [id, email, hashedPassword, full_name, phone || null, role || 'citizen']
     );
 
     await conn.release();
@@ -41,7 +40,8 @@ router.post('/register', async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('Register error:', error);
-    res.status(500).json({ error: 'Registration failed' });
+    const message = error instanceof Error ? error.message : 'Registration failed';
+    res.status(500).json({ error: message });
   }
 });
 
@@ -81,7 +81,8 @@ router.post('/login', async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('Login error:', error);
-    res.status(500).json({ error: 'Login failed' });
+    const message = error instanceof Error ? error.message : 'Login failed';
+    res.status(500).json({ error: message });
   }
 });
 
