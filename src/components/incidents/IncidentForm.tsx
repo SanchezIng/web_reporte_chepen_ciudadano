@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { AlertCircle, CheckCircle, MapPin, Calendar, FileText, AlertTriangle } from 'lucide-react';
+import { AlertCircle, CheckCircle, MapPin, Calendar, FileText, AlertTriangle, Image as ImageIcon } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { incidents, categories } from '../../lib/api';
 import { IncidentCategory } from '../../lib/types';
@@ -24,6 +24,9 @@ export function IncidentForm({ onSuccess }: IncidentFormProps) {
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
   const [gettingLocation, setGettingLocation] = useState(false);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   useEffect(() => {
     loadCategories();
@@ -85,6 +88,22 @@ export function IncidentForm({ onSuccess }: IncidentFormProps) {
     setLoading(true);
 
     try {
+      let imageUrl: string | undefined;
+      if (imageFile) {
+        setUploadingImage(true);
+        const form = new FormData();
+        form.append('file', imageFile);
+        form.append('upload_preset', import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET);
+        const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
+        const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, { method: 'POST', body: form });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error?.message || 'Error subiendo imagen');
+        }
+        imageUrl = data.secure_url as string;
+        setUploadingImage(false);
+      }
+
       await incidents.create({
         category_id: formData.category_id,
         title: formData.title,
@@ -94,6 +113,7 @@ export function IncidentForm({ onSuccess }: IncidentFormProps) {
         longitude: location?.lng || null,
         incident_date: formData.incident_date,
         priority: formData.priority,
+        images: imageUrl ? [imageUrl] : undefined,
       });
 
       setSuccess(true);
@@ -106,6 +126,8 @@ export function IncidentForm({ onSuccess }: IncidentFormProps) {
         priority: 'medium',
       });
       setLocation(null);
+      setImageFile(null);
+      setImagePreview(null);
 
       if (onSuccess) {
         setTimeout(() => onSuccess(), 1500);
@@ -213,6 +235,25 @@ export function IncidentForm({ onSuccess }: IncidentFormProps) {
             placeholder="Describe lo que sucedió con el mayor detalle posible..."
             required
           />
+        </div>
+
+        <div>
+          <label htmlFor="image" className="block text-sm font-medium text-gray-700 mb-2">Imagen (opcional)</label>
+          <div className="flex items-center gap-3">
+            <label className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg bg-white cursor-pointer hover:bg-gray-50">
+              <ImageIcon className="w-5 h-5 text-gray-600 mr-2" />
+              <span className="text-sm text-gray-700">Seleccionar archivo</span>
+              <input id="image" type="file" accept="image/*" className="hidden" onChange={(e) => {
+                const f = e.target.files?.[0] || null;
+                setImageFile(f);
+                setImagePreview(f ? URL.createObjectURL(f) : null);
+              }} />
+            </label>
+            {imagePreview && (
+              <img src={imagePreview} alt="preview" className="h-16 w-16 object-cover rounded-lg border" />
+            )}
+          </div>
+          {uploadingImage && <p className="mt-2 text-sm text-blue-600">Subiendo imagen...</p>}
         </div>
 
         <div>
