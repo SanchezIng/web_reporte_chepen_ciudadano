@@ -10,7 +10,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res) => {
   try {
     conn = await pool.getConnection();
 
-    let query = `
+    const queryWithVideo = `
       SELECT i.*, ic.name as category_name, ic.color as category_color, p.full_name, p.email,
         (SELECT image_url FROM incident_images WHERE incident_id = i.id ORDER BY uploaded_at LIMIT 1) AS first_image_url,
         (SELECT video_url FROM incident_videos WHERE incident_id = i.id ORDER BY uploaded_at LIMIT 1) AS first_video_url
@@ -18,6 +18,15 @@ router.get('/', authMiddleware, async (req: AuthRequest, res) => {
       JOIN incident_categories ic ON i.category_id = ic.id
       JOIN profiles p ON i.user_id = p.id
     `;
+    const queryNoVideo = `
+      SELECT i.*, ic.name as category_name, ic.color as category_color, p.full_name, p.email,
+        (SELECT image_url FROM incident_images WHERE incident_id = i.id ORDER BY uploaded_at LIMIT 1) AS first_image_url
+      FROM incidents i
+      JOIN incident_categories ic ON i.category_id = ic.id
+      JOIN profiles p ON i.user_id = p.id
+    `;
+
+    let query = queryWithVideo;
 
     if (req.user?.role === 'citizen') {
       query += ' WHERE i.deleted_at IS NULL AND i.user_id = ?';
@@ -27,10 +36,25 @@ router.get('/', authMiddleware, async (req: AuthRequest, res) => {
 
     query += ' ORDER BY i.created_at DESC LIMIT 100';
 
-    const [rows]: any = await conn.execute(
-      query,
-      req.user?.role === 'citizen' ? [req.user.id] : []
-    );
+    let rows: any;
+    try {
+      const [r]: any = await conn.execute(
+        query,
+        req.user?.role === 'citizen' ? [req.user.id] : []
+      );
+      rows = r;
+    } catch (e: any) {
+      try {
+        query = queryNoVideo + (req.user?.role === 'citizen' ? ' WHERE i.deleted_at IS NULL AND i.user_id = ?' : ' WHERE i.deleted_at IS NULL') + ' ORDER BY i.created_at DESC LIMIT 100';
+        const [r2]: any = await conn.execute(
+          query,
+          req.user?.role === 'citizen' ? [req.user.id] : []
+        );
+        rows = r2;
+      } catch (e2: any) {
+        throw e2;
+      }
+    }
 
     res.json(rows || []);
   } catch (error) {
@@ -63,10 +87,14 @@ router.get('/:id', authMiddleware, async (req: AuthRequest, res) => {
       'SELECT id, image_url, uploaded_at FROM incident_images WHERE incident_id = ? ORDER BY uploaded_at',
       [req.params.id]
     );
-    const [videos]: any = await conn.execute(
-      'SELECT id, video_url, uploaded_at FROM incident_videos WHERE incident_id = ? ORDER BY uploaded_at',
-      [req.params.id]
-    );
+    let videos: any = [];
+    try {
+      const [v]: any = await conn.execute(
+        'SELECT id, video_url, uploaded_at FROM incident_videos WHERE incident_id = ? ORDER BY uploaded_at',
+        [req.params.id]
+      );
+      videos = v;
+    } catch {}
     const incident = rows[0];
     incident.images = images || [];
     incident.videos = videos || [];
@@ -126,13 +154,17 @@ router.post('/', authMiddleware, async (req: AuthRequest, res) => {
       }
     }
     if (Array.isArray(videos) && videos.length > 0) {
-      for (const url of videos) {
-        if (!url || typeof url !== 'string') continue;
-        const videoId = uuidv4();
-        await conn.execute(
-          'INSERT INTO incident_videos (id, incident_id, video_url, uploaded_at) VALUES (?, ?, ?, NOW())',
-          [videoId, id, url]
-        );
+      try {
+        for (const url of videos) {
+          if (!url || typeof url !== 'string') continue;
+          const videoId = uuidv4();
+          await conn.execute(
+            'INSERT INTO incident_videos (id, incident_id, video_url, uploaded_at) VALUES (?, ?, ?, NOW())',
+            [videoId, id, url]
+          );
+        }
+      } catch (e) {
+        // ignore video insert errors to not block incident creation
       }
     }
 
@@ -149,10 +181,14 @@ router.post('/', authMiddleware, async (req: AuthRequest, res) => {
       'SELECT id, image_url, uploaded_at FROM incident_images WHERE incident_id = ? ORDER BY uploaded_at',
       [id]
     );
-    const [vids]: any = await conn.execute(
-      'SELECT id, video_url, uploaded_at FROM incident_videos WHERE incident_id = ? ORDER BY uploaded_at',
-      [id]
-    );
+    let vids: any = [];
+    try {
+      const [v2]: any = await conn.execute(
+        'SELECT id, video_url, uploaded_at FROM incident_videos WHERE incident_id = ? ORDER BY uploaded_at',
+        [id]
+      );
+      vids = v2;
+    } catch {}
 
     const created = rows[0] || {};
     created.images = imgs || [];
@@ -285,14 +321,18 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res) => {
       }
     }
     if (Array.isArray(videos)) {
-      await conn.execute('DELETE FROM incident_videos WHERE incident_id = ?', [req.params.id]);
-      for (const url of videos) {
-        if (!url || typeof url !== 'string') continue;
-        const videoId = uuidv4();
-        await conn.execute(
-          'INSERT INTO incident_videos (id, incident_id, video_url, uploaded_at) VALUES (?, ?, ?, NOW())',
-          [videoId, req.params.id, url]
-        );
+      try {
+        await conn.execute('DELETE FROM incident_videos WHERE incident_id = ?', [req.params.id]);
+        for (const url of videos) {
+          if (!url || typeof url !== 'string') continue;
+          const videoId = uuidv4();
+          await conn.execute(
+            'INSERT INTO incident_videos (id, incident_id, video_url, uploaded_at) VALUES (?, ?, ?, NOW())',
+            [videoId, req.params.id, url]
+          );
+        }
+      } catch (e) {
+        // ignore video update errors to allow editing other fields
       }
     }
 
@@ -311,10 +351,14 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res) => {
       'SELECT id, image_url, uploaded_at FROM incident_images WHERE incident_id = ? ORDER BY uploaded_at',
       [req.params.id]
     );
-    const [videosRows]: any = await conn.execute(
-      'SELECT id, video_url, uploaded_at FROM incident_videos WHERE incident_id = ? ORDER BY uploaded_at',
-      [req.params.id]
-    );
+    let videosRows: any = [];
+    try {
+      const [vr]: any = await conn.execute(
+        'SELECT id, video_url, uploaded_at FROM incident_videos WHERE incident_id = ? ORDER BY uploaded_at',
+        [req.params.id]
+      );
+      videosRows = vr;
+    } catch {}
 
     const incident = updated[0] || inc;
     incident.images = imagesRows || [];
