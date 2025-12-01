@@ -7,6 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 const router = Router();
 
 router.post('/register', async (req: Request, res: Response) => {
+  let conn: any;
   try {
     const { email, password, full_name, phone, role } = req.body;
 
@@ -14,11 +15,10 @@ router.post('/register', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    const conn = await pool.getConnection();
+    conn = await pool.getConnection();
 
     const [existing] = await conn.execute('SELECT id FROM profiles WHERE email = ?', [email]);
     if (Array.isArray(existing) && existing.length > 0) {
-      await conn.release();
       return res.status(409).json({ error: 'Email already registered' });
     }
 
@@ -30,8 +30,6 @@ router.post('/register', async (req: Request, res: Response) => {
       [id, email, hashedPassword, full_name, phone || null, role || 'citizen']
     );
 
-    await conn.release();
-
     const token = generateToken({ id, email, role: role || 'citizen' });
 
     res.status(201).json({
@@ -42,10 +40,13 @@ router.post('/register', async (req: Request, res: Response) => {
     console.error('Register error:', error);
     const message = error instanceof Error ? error.message : 'Registration failed';
     res.status(500).json({ error: message });
+  } finally {
+    try { if (conn) await conn.release(); } catch {}
   }
 });
 
 router.post('/login', async (req: Request, res: Response) => {
+  let conn: any;
   try {
     const { email, password } = req.body;
 
@@ -53,14 +54,12 @@ router.post('/login', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Email and password required' });
     }
 
-    const conn = await pool.getConnection();
+    conn = await pool.getConnection();
 
     const [rows]: any = await conn.execute(
       'SELECT id, email, password_hash, full_name, phone, role FROM profiles WHERE email = ?',
       [email]
     );
-
-    await conn.release();
 
     if (!Array.isArray(rows) || rows.length === 0) {
       return res.status(401).json({ error: 'Invalid credentials' });
@@ -83,6 +82,8 @@ router.post('/login', async (req: Request, res: Response) => {
     console.error('Login error:', error);
     const message = error instanceof Error ? error.message : 'Login failed';
     res.status(500).json({ error: message });
+  } finally {
+    try { if (conn) await conn.release(); } catch {}
   }
 });
 

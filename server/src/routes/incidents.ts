@@ -6,8 +6,9 @@ import { v4 as uuidv4 } from 'uuid';
 const router = Router();
 
 router.get('/', authMiddleware, async (req: AuthRequest, res) => {
+  let conn: any;
   try {
-    const conn = await pool.getConnection();
+    conn = await pool.getConnection();
 
     let query = `
       SELECT i.*, ic.name as category_name, ic.color as category_color, p.full_name, p.email
@@ -29,17 +30,19 @@ router.get('/', authMiddleware, async (req: AuthRequest, res) => {
       req.user?.role === 'citizen' ? [req.user.id] : []
     );
 
-    await conn.release();
     res.json(rows || []);
   } catch (error) {
     console.error('Get incidents error:', error);
     res.status(500).json({ error: 'Failed to fetch incidents' });
+  } finally {
+    try { if (conn) await conn.release(); } catch {}
   }
 });
 
 router.get('/:id', authMiddleware, async (req: AuthRequest, res) => {
+  let conn: any;
   try {
-    const conn = await pool.getConnection();
+    conn = await pool.getConnection();
 
     const [rows]: any = await conn.execute(
       `SELECT i.*, ic.name as category_name, ic.color as category_color, p.full_name, p.email
@@ -50,8 +53,6 @@ router.get('/:id', authMiddleware, async (req: AuthRequest, res) => {
       [req.params.id]
     );
 
-    await conn.release();
-
     if (!Array.isArray(rows) || rows.length === 0) {
       return res.status(404).json({ error: 'Incident not found' });
     }
@@ -60,10 +61,13 @@ router.get('/:id', authMiddleware, async (req: AuthRequest, res) => {
   } catch (error) {
     console.error('Get incident error:', error);
     res.status(500).json({ error: 'Failed to fetch incident' });
+  } finally {
+    try { if (conn) await conn.release(); } catch {}
   }
 });
 
 router.post('/', authMiddleware, async (req: AuthRequest, res) => {
+  let conn: any;
   try {
     const { category_id, title, description, latitude, longitude, address, incident_date, priority } = req.body;
 
@@ -71,7 +75,7 @@ router.post('/', authMiddleware, async (req: AuthRequest, res) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    const conn = await pool.getConnection();
+    conn = await pool.getConnection();
 
     const id = uuidv4();
     const toMySQLDateTime = (d: any) => {
@@ -107,19 +111,20 @@ router.post('/', authMiddleware, async (req: AuthRequest, res) => {
       [id]
     );
 
-    await conn.release();
-
     res.status(201).json(rows[0]);
   } catch (error) {
     console.error('Create incident error:', error);
     res.status(500).json({ error: 'Failed to create incident' });
+  } finally {
+    try { if (conn) await conn.release(); } catch {}
   }
 });
 
 router.patch('/:id', authMiddleware, roleMiddleware(['authority']), async (req: AuthRequest, res) => {
+  let conn: any;
   try {
     const { status, priority, comment } = req.body;
-    const conn = await pool.getConnection();
+    conn = await pool.getConnection();
 
     const [incident]: any = await conn.execute('SELECT * FROM incidents WHERE id = ?', [req.params.id]);
 
@@ -165,12 +170,12 @@ router.patch('/:id', authMiddleware, roleMiddleware(['authority']), async (req: 
       [req.params.id]
     );
 
-    await conn.release();
-
     res.json(updated[0]);
   } catch (error) {
     console.error('Update incident error:', error);
     res.status(500).json({ error: 'Failed to update incident' });
+  } finally {
+    try { if (conn) await conn.release(); } catch {}
   }
 });
 
