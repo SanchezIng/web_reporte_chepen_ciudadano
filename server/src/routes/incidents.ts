@@ -135,7 +135,7 @@ router.patch('/:id', authMiddleware, roleMiddleware(['authority']), async (req: 
 
     const oldStatus = incident[0].status;
 
-    await conn.execute('START TRANSACTION');
+    await conn.beginTransaction();
 
     if (status) {
       await conn.execute(
@@ -159,7 +159,7 @@ router.patch('/:id', authMiddleware, roleMiddleware(['authority']), async (req: 
       );
     }
 
-    await conn.execute('COMMIT');
+    await conn.commit();
 
     const [updated]: any = await conn.execute(
       `SELECT i.*, ic.name as category_name, ic.color as category_color, p.full_name, p.email
@@ -172,6 +172,7 @@ router.patch('/:id', authMiddleware, roleMiddleware(['authority']), async (req: 
 
     res.json(updated[0]);
   } catch (error) {
+    try { if (conn) await conn.rollback(); } catch {}
     console.error('Update incident error:', error);
     res.status(500).json({ error: 'Failed to update incident' });
   } finally {
