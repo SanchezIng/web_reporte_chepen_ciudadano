@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { AlertCircle, CheckCircle, MapPin, Calendar, FileText, AlertTriangle, Image as ImageIcon } from 'lucide-react';
+import { AlertCircle, CheckCircle, MapPin, Calendar, FileText, AlertTriangle, Image as ImageIcon, Video as VideoIcon } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { incidents, categories } from '../../lib/api';
 import { IncidentCategory } from '../../lib/types';
@@ -24,9 +24,9 @@ export function IncidentForm({ onSuccess }: IncidentFormProps) {
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
   const [gettingLocation, setGettingLocation] = useState(false);
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [uploadingImage, setUploadingImage] = useState(false);
+  const [mediaFiles, setMediaFiles] = useState<File[]>([]);
+  const [mediaPreviews, setMediaPreviews] = useState<{ url: string; type: 'image' | 'video' }[]>([]);
+  const [uploadingMedia, setUploadingMedia] = useState(false);
 
   useEffect(() => {
     loadCategories();
@@ -88,20 +88,33 @@ export function IncidentForm({ onSuccess }: IncidentFormProps) {
     setLoading(true);
 
     try {
-      let imageUrl: string | undefined;
-      if (imageFile) {
-        setUploadingImage(true);
-        const form = new FormData();
-        form.append('file', imageFile);
-        form.append('upload_preset', import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET);
+      let imageUrls: string[] = [];
+      let videoUrls: string[] = [];
+
+      if (mediaFiles.length > 0) {
+        setUploadingMedia(true);
         const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
-        const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, { method: 'POST', body: form });
-        const data = await res.json();
-        if (!res.ok) {
-          throw new Error(data.error?.message || 'Error subiendo imagen');
+        const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
+
+        for (const file of mediaFiles) {
+          const form = new FormData();
+          form.append('file', file);
+          form.append('upload_preset', uploadPreset);
+          const isVideo = file.type.startsWith('video');
+          const endpoint = `https://api.cloudinary.com/v1_1/${cloudName}/${isVideo ? 'video' : 'image'}/upload`;
+          const res = await fetch(endpoint, { method: 'POST', body: form });
+          const data = await res.json();
+          if (!res.ok) {
+            throw new Error(data.error?.message || 'Error subiendo archivo');
+          }
+          const url = data.secure_url as string;
+          if (isVideo) {
+            videoUrls.push(url);
+          } else {
+            imageUrls.push(url);
+          }
         }
-        imageUrl = data.secure_url as string;
-        setUploadingImage(false);
+        setUploadingMedia(false);
       }
 
       await incidents.create({
@@ -113,7 +126,8 @@ export function IncidentForm({ onSuccess }: IncidentFormProps) {
         longitude: location?.lng || null,
         incident_date: formData.incident_date,
         priority: formData.priority,
-        images: imageUrl ? [imageUrl] : undefined,
+        images: imageUrls.length > 0 ? imageUrls : undefined,
+        videos: videoUrls.length > 0 ? videoUrls : undefined,
       });
 
       setSuccess(true);
@@ -126,8 +140,8 @@ export function IncidentForm({ onSuccess }: IncidentFormProps) {
         priority: 'medium',
       });
       setLocation(null);
-      setImageFile(null);
-      setImagePreview(null);
+      setMediaFiles([]);
+      setMediaPreviews([]);
 
       if (onSuccess) {
         setTimeout(() => onSuccess(), 1500);
@@ -238,22 +252,39 @@ export function IncidentForm({ onSuccess }: IncidentFormProps) {
         </div>
 
         <div>
-          <label htmlFor="image" className="block text-sm font-medium text-gray-700 mb-2">Imagen (opcional)</label>
-          <div className="flex items-center gap-3">
+          <label htmlFor="media" className="block text-sm font-medium text-gray-700 mb-2">Multimedia (imágenes y videos, opcional)</label>
+          <div className="flex items-center gap-3 flex-wrap">
             <label className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg bg-white cursor-pointer hover:bg-gray-50">
               <ImageIcon className="w-5 h-5 text-gray-600 mr-2" />
-              <span className="text-sm text-gray-700">Seleccionar archivo</span>
-              <input id="image" type="file" accept="image/*" className="hidden" onChange={(e) => {
-                const f = e.target.files?.[0] || null;
-                setImageFile(f);
-                setImagePreview(f ? URL.createObjectURL(f) : null);
-              }} />
+              <VideoIcon className="w-5 h-5 text-gray-600 mr-2" />
+              <span className="text-sm text-gray-700">Seleccionar archivos</span>
+              <input
+                id="media"
+                type="file"
+                accept="image/*,video/*"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  const files = Array.from(e.target.files || []);
+                  setMediaFiles(files);
+                  const previews = files.map((f) => ({ url: URL.createObjectURL(f), type: f.type.startsWith('video') ? 'video' : 'image' }));
+                  setMediaPreviews(previews);
+                }}
+              />
             </label>
-            {imagePreview && (
-              <img src={imagePreview} alt="preview" className="h-16 w-16 object-cover rounded-lg border" />
+            {mediaPreviews.length > 0 && (
+              <div className="flex gap-3 flex-wrap">
+                {mediaPreviews.map((m, idx) => (
+                  m.type === 'image' ? (
+                    <img key={idx} src={m.url} alt="preview" className="h-16 w-16 object-cover rounded-lg border" />
+                  ) : (
+                    <video key={idx} src={m.url} className="h-16 w-24 rounded-lg border" controls />
+                  )
+                ))}
+              </div>
             )}
           </div>
-          {uploadingImage && <p className="mt-2 text-sm text-blue-600">Subiendo imagen...</p>}
+          {uploadingMedia && <p className="mt-2 text-sm text-blue-600">Subiendo archivos...</p>}
         </div>
 
         <div>

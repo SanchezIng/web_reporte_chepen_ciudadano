@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { X, MessageSquare, CheckCircle, XCircle, Clock, Image as ImageIcon } from 'lucide-react';
+import { X, MessageSquare, CheckCircle, XCircle, Clock, Image as ImageIcon, Video as VideoIcon } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { incidents as incidentsAPI } from '../../lib/api';
 import { Incident } from '../../lib/types';
@@ -137,6 +137,19 @@ export function AuthorityDashboard({ incident, onClose, onUpdate }: AuthorityDas
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 {detail.images.map((img) => (
                   <img key={img.id} src={img.image_url} alt="evidencia" className="w-full h-32 object-cover rounded-lg border" />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {detail.videos && detail.videos.length > 0 && (
+            <div className="border-t pt-6">
+              <h4 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <VideoIcon className="w-5 h-5" /> Videos
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {detail.videos.map((vid) => (
+                  <video key={vid.id} src={vid.video_url} className="w-full h-40 rounded-lg border" controls />
                 ))}
               </div>
             </div>

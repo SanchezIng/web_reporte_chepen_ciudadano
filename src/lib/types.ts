@@ -38,12 +38,21 @@ export interface Incident {
   email: string;
   images?: IncidentImage[];
   first_image_url?: string | null;
+  first_video_url?: string | null;
+  videos?: IncidentVideo[];
 }
 
 export interface IncidentImage {
   id: string;
   incident_id: string;
   image_url: string;
+  uploaded_at: string;
+}
+
+export interface IncidentVideo {
+  id: string;
+  incident_id: string;
+  video_url: string;
   uploaded_at: string;
 }
 

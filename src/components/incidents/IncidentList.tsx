@@ -61,6 +61,17 @@ export function IncidentList({ onSelectIncident }: IncidentListProps) {
   const [categoriesList, setCategoriesList] = useState<any[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('');
 
+  const getVideoPoster = (url?: string | null) => {
+    if (!url) return undefined;
+    try {
+      if (!url.includes('/video/upload/')) return undefined;
+      const jpg = url.replace('/video/upload/', '/video/upload/so_0/').replace(/\.(mp4|webm|ogg)(\?.*)?$/i, '.jpg');
+      return jpg;
+    } catch {
+      return undefined;
+    }
+  };
+
   useEffect(() => {
     loadIncidents();
     loadCategories();
@@ -270,8 +281,20 @@ export function IncidentList({ onSelectIncident }: IncidentListProps) {
                   <p className="text-sm text-gray-600 mt-1">{incident.description.substring(0, 100)}...</p>
                 </div>
                 <div className="ml-4 flex flex-col items-end gap-2">
-                  {incident.first_image_url && (
+                  {incident.first_image_url ? (
                     <img src={incident.first_image_url} alt="evidencia" className="w-20 h-20 object-cover rounded" />
+                  ) : (
+                    incident.first_video_url ? (
+                      <video
+                        src={incident.first_video_url}
+                        poster={getVideoPoster(incident.first_video_url)}
+                        className="w-20 h-20 object-cover rounded"
+                        muted
+                        autoPlay
+                        loop
+                        playsInline
+                      />
+                    ) : null
                   )}
                   <span
                     className={`inline-block px-2 py-1 rounded text-xs font-medium ${

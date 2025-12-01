@@ -58,6 +58,15 @@ CREATE TABLE IF NOT EXISTS incident_images (
   INDEX idx_incident_id (incident_id)
 );
 
+CREATE TABLE IF NOT EXISTS incident_videos (
+  id VARCHAR(36) PRIMARY KEY,
+  incident_id VARCHAR(36) NOT NULL,
+  video_url VARCHAR(2000) NOT NULL,
+  uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (incident_id) REFERENCES incidents(id),
+  INDEX idx_incident_id_v (incident_id)
+);
+
 CREATE TABLE IF NOT EXISTS incident_updates (
   id VARCHAR(36) PRIMARY KEY,
   incident_id VARCHAR(36) NOT NULL,
