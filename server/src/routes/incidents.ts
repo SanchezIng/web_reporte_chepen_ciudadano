@@ -69,7 +69,7 @@ router.get('/:id', authMiddleware, async (req: AuthRequest, res) => {
 router.post('/', authMiddleware, async (req: AuthRequest, res) => {
   let conn: any;
   try {
-    const { category_id, title, description, latitude, longitude, address, incident_date, priority } = req.body;
+    const { category_id, title, description, latitude, longitude, address, incident_date, priority, images } = req.body;
 
     if (!category_id || !title || !description || !incident_date) {
       return res.status(400).json({ error: 'Missing required fields' });
@@ -102,6 +102,17 @@ router.post('/', authMiddleware, async (req: AuthRequest, res) => {
       ]
     );
 
+    if (Array.isArray(images) && images.length > 0) {
+      for (const url of images) {
+        if (!url || typeof url !== 'string') continue;
+        const imageId = uuidv4();
+        await conn.execute(
+          'INSERT INTO incident_images (id, incident_id, image_url, uploaded_at) VALUES (?, ?, ?, NOW())',
+          [imageId, id, url]
+        );
+      }
+    }
+
     const [rows]: any = await conn.execute(
       `SELECT i.*, ic.name as category_name, ic.color as category_color, p.full_name, p.email
        FROM incidents i
@@ -111,7 +122,14 @@ router.post('/', authMiddleware, async (req: AuthRequest, res) => {
       [id]
     );
 
-    res.status(201).json(rows[0]);
+    const [imgs]: any = await conn.execute(
+      'SELECT id, image_url, uploaded_at FROM incident_images WHERE incident_id = ? ORDER BY uploaded_at',
+      [id]
+    );
+
+    const created = rows[0] || {};
+    created.images = imgs || [];
+    res.status(201).json(created);
   } catch (error) {
     console.error('Create incident error:', error);
     res.status(500).json({ error: 'Failed to create incident' });
