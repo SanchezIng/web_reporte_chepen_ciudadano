@@ -57,7 +57,13 @@ router.get('/:id', authMiddleware, async (req: AuthRequest, res) => {
       return res.status(404).json({ error: 'Incident not found' });
     }
 
-    res.json(rows[0]);
+    const [images]: any = await conn.execute(
+      'SELECT id, image_url, uploaded_at FROM incident_images WHERE incident_id = ? ORDER BY uploaded_at',
+      [req.params.id]
+    );
+    const incident = rows[0];
+    incident.images = images || [];
+    res.json(incident);
   } catch (error) {
     console.error('Get incident error:', error);
     res.status(500).json({ error: 'Failed to fetch incident' });

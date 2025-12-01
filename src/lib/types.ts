@@ -36,6 +36,7 @@ export interface Incident {
   category_color: string;
   full_name: string;
   email: string;
+  images?: IncidentImage[];
 }
 
 export interface IncidentImage {

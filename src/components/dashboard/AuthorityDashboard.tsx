@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, MessageSquare, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { X, MessageSquare, CheckCircle, XCircle, Clock, Image as ImageIcon } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { incidents as incidentsAPI } from '../../lib/api';
 import { Incident } from '../../lib/types';
@@ -115,6 +115,19 @@ export function AuthorityDashboard({ incident, onClose, onUpdate }: AuthorityDas
               </div>
             )}
           </div>
+
+          {incident.images && incident.images.length > 0 && (
+            <div className="border-t pt-6">
+              <h4 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <ImageIcon className="w-5 h-5" /> Evidencias
+              </h4>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                {incident.images.map((img) => (
+                  <img key={img.id} src={img.image_url} alt="evidencia" className="w-full h-32 object-cover rounded-lg border" />
+                ))}
+              </div>
+            </div>
+          )}
 
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-800 text-sm">
