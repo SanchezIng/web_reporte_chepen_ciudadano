@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Clock, MapPin, AlertCircle, Filter, Search } from 'lucide-react';
+import { Clock, MapPin, AlertCircle, Filter, Search, Pencil, Trash2 } from 'lucide-react';
+import { categories as categoriesAPI } from '../../lib/api';
 import { incidents as incidentsAPI } from '../../lib/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { Incident } from '../../lib/types';
@@ -45,9 +46,24 @@ export function IncidentList({ onSelectIncident }: IncidentListProps) {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
+  const [editing, setEditing] = useState<Incident | null>(null);
+  const [deleting, setDeleting] = useState<Incident | null>(null);
+  const [editForm, setEditForm] = useState({
+    title: '',
+    description: '',
+    address: '',
+    incident_date: '',
+    priority: 'medium' as 'low' | 'medium' | 'high' | 'urgent',
+  });
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [categoriesList, setCategoriesList] = useState<any[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string>('');
 
   useEffect(() => {
     loadIncidents();
+    loadCategories();
   }, []);
 
   useEffect(() => {
@@ -63,6 +79,13 @@ export function IncidentList({ onSelectIncident }: IncidentListProps) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadCategories = async () => {
+    try {
+      const data = await categoriesAPI.list();
+      setCategoriesList(data);
+    } catch {}
   };
 
   const filterIncidents = () => {
@@ -99,6 +122,66 @@ export function IncidentList({ onSelectIncident }: IncidentListProps) {
   const handleSelectIncident = (incident: Incident) => {
     if (onSelectIncident) {
       onSelectIncident(incident);
+    }
+  };
+
+  const openEdit = (incident: Incident) => {
+    setEditing(incident);
+    setEditForm({
+      title: incident.title,
+      description: incident.description,
+      address: incident.address || '',
+      incident_date: new Date(incident.incident_date).toISOString().slice(0, 16),
+      priority: incident.priority,
+    });
+    setSelectedCategory(incident.category_id);
+    setImagePreview(incident.first_image_url || null);
+    setImageFile(null);
+  };
+
+  const submitEdit = async () => {
+    if (!editing) return;
+    try {
+      let imageUrl: string | undefined;
+      if (imageFile) {
+        setUploadingImage(true);
+        const form = new FormData();
+        form.append('file', imageFile);
+        form.append('upload_preset', import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET);
+        const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
+        const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, { method: 'POST', body: form });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error?.message || 'Error subiendo imagen');
+        imageUrl = data.secure_url as string;
+        setUploadingImage(false);
+      }
+
+      await incidentsAPI.edit(editing.id, {
+        category_id: selectedCategory || editing.category_id,
+        title: editForm.title,
+        description: editForm.description,
+        address: editForm.address || null,
+        incident_date: editForm.incident_date,
+        priority: editForm.priority,
+        images: imageUrl ? [imageUrl] : undefined,
+      });
+      setEditing(null);
+      setImageFile(null);
+      setImagePreview(null);
+      await loadIncidents();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleting) return;
+    try {
+      await incidentsAPI.remove(deleting.id);
+      setDeleting(null);
+      await loadIncidents();
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -186,7 +269,10 @@ export function IncidentList({ onSelectIncident }: IncidentListProps) {
                   <h3 className="font-semibold text-gray-900">{incident.title}</h3>
                   <p className="text-sm text-gray-600 mt-1">{incident.description.substring(0, 100)}...</p>
                 </div>
-                <div className="ml-4 text-right">
+                <div className="ml-4 flex flex-col items-end gap-2">
+                  {incident.first_image_url && (
+                    <img src={incident.first_image_url} alt="evidencia" className="w-20 h-20 object-cover rounded" />
+                  )}
                   <span
                     className={`inline-block px-2 py-1 rounded text-xs font-medium ${
                       statusColors[incident.status as keyof typeof statusColors]
@@ -194,6 +280,26 @@ export function IncidentList({ onSelectIncident }: IncidentListProps) {
                   >
                     {statusLabels[incident.status as keyof typeof statusLabels]}
                   </span>
+                  {profile?.role === 'citizen' && incident.user_id === user?.id && incident.status === 'pending' && (
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); openEdit(incident); }}
+                        className="p-1 rounded border hover:bg-gray-50"
+                        title="Editar"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setDeleting(incident); }}
+                        className="p-1 rounded border hover:bg-gray-50"
+                        title="Eliminar"
+                      >
+                        <Trash2 className="w-4 h-4 text-red-600" />
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -230,6 +336,82 @@ export function IncidentList({ onSelectIncident }: IncidentListProps) {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {editing && (
+        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 p-4" onClick={() => setEditing(null)}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="p-6 space-y-4">
+              <h3 className="text-lg font-semibold">Editar Incidencia</h3>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Categoría</label>
+                <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)} className="w-full px-4 py-2 border rounded-lg">
+                  {categoriesList.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Título</label>
+                <input className="w-full px-4 py-2 border rounded-lg" value={editForm.title} onChange={(e) => setEditForm({ ...editForm, title: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
+                <textarea className="w-full px-4 py-2 border rounded-lg" rows={3} value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Dirección</label>
+                <input className="w-full px-4 py-2 border rounded-lg" value={editForm.address} onChange={(e) => setEditForm({ ...editForm, address: e.target.value })} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Fecha y hora</label>
+                  <input type="datetime-local" className="w-full px-4 py-2 border rounded-lg" value={editForm.incident_date} onChange={(e) => setEditForm({ ...editForm, incident_date: e.target.value })} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Prioridad</label>
+                  <select className="w-full px-4 py-2 border rounded-lg" value={editForm.priority} onChange={(e) => setEditForm({ ...editForm, priority: e.target.value as any })}>
+                    <option value="low">Baja</option>
+                    <option value="medium">Media</option>
+                    <option value="high">Alta</option>
+                    <option value="urgent">Urgente</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Imagen (opcional)</label>
+                <div className="flex items-center gap-3">
+                  <input type="file" accept="image/*" onChange={(e) => {
+                    const f = e.target.files?.[0] || null;
+                    setImageFile(f);
+                    setImagePreview(f ? URL.createObjectURL(f) : editing.first_image_url || null);
+                  }} />
+                  {imagePreview && <img src={imagePreview} className="h-16 w-16 object-cover rounded border" />}
+                </div>
+                {uploadingImage && <p className="mt-2 text-sm text-blue-600">Subiendo imagen...</p>}
+              </div>
+              <div className="flex gap-3 justify-end">
+                <button className="px-4 py-2 border rounded-lg" onClick={() => setEditing(null)}>Cancelar</button>
+                <button className="px-4 py-2 bg-blue-600 text-white rounded-lg" onClick={submitEdit}>Guardar</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleting && (
+        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 p-4" onClick={() => setDeleting(null)}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+            <div className="p-6 space-y-4">
+              <h3 className="text-lg font-semibold">Eliminar Incidencia</h3>
+              <p className="text-sm text-gray-600">¿Seguro que deseas eliminar este reporte? Solo es posible si está en estado Pendiente.</p>
+              <div className="flex gap-3 justify-end">
+                <button className="px-4 py-2 border rounded-lg" onClick={() => setDeleting(null)}>Cancelar</button>
+                <button className="px-4 py-2 bg-red-600 text-white rounded-lg" onClick={confirmDelete}>Eliminar</button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -37,6 +37,7 @@ export interface Incident {
   full_name: string;
   email: string;
   images?: IncidentImage[];
+  first_image_url?: string | null;
 }
 
 export interface IncidentImage {

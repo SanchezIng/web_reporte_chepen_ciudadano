@@ -66,6 +66,8 @@ export const incidents = {
   get: (id: string) => apiCall(`/incidents/${id}`),
   create: (data: any) => apiCall('/incidents', { method: 'POST', body: data }),
   update: (id: string, data: any) => apiCall(`/incidents/${id}`, { method: 'PATCH', body: data }),
+  edit: (id: string, data: any) => apiCall(`/incidents/${id}`, { method: 'PUT', body: data }),
+  remove: (id: string) => apiCall(`/incidents/${id}`, { method: 'DELETE' }),
 };
 
 export const categories = {

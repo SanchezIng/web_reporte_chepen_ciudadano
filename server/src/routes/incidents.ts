@@ -11,7 +11,8 @@ router.get('/', authMiddleware, async (req: AuthRequest, res) => {
     conn = await pool.getConnection();
 
     let query = `
-      SELECT i.*, ic.name as category_name, ic.color as category_color, p.full_name, p.email
+      SELECT i.*, ic.name as category_name, ic.color as category_color, p.full_name, p.email,
+        (SELECT image_url FROM incident_images WHERE incident_id = i.id ORDER BY uploaded_at LIMIT 1) AS first_image_url
       FROM incidents i
       JOIN incident_categories ic ON i.category_id = ic.id
       JOIN profiles p ON i.user_id = p.id
@@ -205,3 +206,114 @@ router.patch('/:id', authMiddleware, roleMiddleware(['authority']), async (req: 
 });
 
 export default router;
+router.put('/:id', authMiddleware, async (req: AuthRequest, res) => {
+  let conn: any;
+  try {
+    const { category_id, title, description, latitude, longitude, address, incident_date, priority, images } = req.body;
+    conn = await pool.getConnection();
+
+    const [rows]: any = await conn.execute('SELECT * FROM incidents WHERE id = ? AND deleted_at IS NULL', [req.params.id]);
+
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return res.status(404).json({ error: 'Incident not found' });
+    }
+
+    const inc = rows[0];
+    if (inc.user_id !== req.user?.id) {
+      return res.status(403).json({ error: 'Not allowed to edit this incident' });
+    }
+
+    if (inc.status !== 'pending') {
+      return res.status(400).json({ error: 'Only pending incidents can be edited' });
+    }
+
+    const toMySQLDateTime = (d: any) => {
+      const date = typeof d === 'string' || typeof d === 'number' ? new Date(d) : d;
+      const pad = (n: number) => String(n).padStart(2, '0');
+      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+    };
+
+    await conn.beginTransaction();
+
+    await conn.execute(
+      `UPDATE incidents
+       SET category_id = ?, title = ?, description = ?, latitude = ?, longitude = ?, address = ?, priority = ?, incident_date = ?, updated_at = NOW()
+       WHERE id = ?`,
+      [
+        category_id || inc.category_id,
+        title || inc.title,
+        description || inc.description,
+        latitude ?? inc.latitude,
+        longitude ?? inc.longitude,
+        address ?? inc.address,
+        priority || inc.priority,
+        toMySQLDateTime(incident_date || inc.incident_date),
+        req.params.id,
+      ]
+    );
+
+    if (Array.isArray(images)) {
+      await conn.execute('DELETE FROM incident_images WHERE incident_id = ?', [req.params.id]);
+      for (const url of images) {
+        if (!url || typeof url !== 'string') continue;
+        const imageId = uuidv4();
+        await conn.execute(
+          'INSERT INTO incident_images (id, incident_id, image_url, uploaded_at) VALUES (?, ?, ?, NOW())',
+          [imageId, req.params.id, url]
+        );
+      }
+    }
+
+    await conn.commit();
+
+    const [updated]: any = await conn.execute(
+      `SELECT i.*, ic.name as category_name, ic.color as category_color, p.full_name, p.email
+       FROM incidents i
+       JOIN incident_categories ic ON i.category_id = ic.id
+       JOIN profiles p ON i.user_id = p.id
+       WHERE i.id = ?`,
+      [req.params.id]
+    );
+
+    const [imagesRows]: any = await conn.execute(
+      'SELECT id, image_url, uploaded_at FROM incident_images WHERE incident_id = ? ORDER BY uploaded_at',
+      [req.params.id]
+    );
+
+    const incident = updated[0] || inc;
+    incident.images = imagesRows || [];
+    res.json(incident);
+  } catch (error) {
+    try { if (conn) await conn.rollback(); } catch {}
+    console.error('Edit incident error:', error);
+    res.status(500).json({ error: 'Failed to edit incident' });
+  } finally {
+    try { if (conn) await conn.release(); } catch {}
+  }
+});
+
+router.delete('/:id', authMiddleware, async (req: AuthRequest, res) => {
+  let conn: any;
+  try {
+    conn = await pool.getConnection();
+    const [rows]: any = await conn.execute('SELECT * FROM incidents WHERE id = ? AND deleted_at IS NULL', [req.params.id]);
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return res.status(404).json({ error: 'Incident not found' });
+    }
+    const inc = rows[0];
+    if (inc.user_id !== req.user?.id) {
+      return res.status(403).json({ error: 'Not allowed to delete this incident' });
+    }
+    if (inc.status !== 'pending') {
+      return res.status(400).json({ error: 'Only pending incidents can be deleted' });
+    }
+
+    await conn.execute('UPDATE incidents SET deleted_at = NOW(), updated_at = NOW() WHERE id = ?', [req.params.id]);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Delete incident error:', error);
+    res.status(500).json({ error: 'Failed to delete incident' });
+  } finally {
+    try { if (conn) await conn.release(); } catch {}
+  }
+});
