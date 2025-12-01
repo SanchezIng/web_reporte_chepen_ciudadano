@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { X, MessageSquare, CheckCircle, XCircle, Clock, Image as ImageIcon } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { incidents as incidentsAPI } from '../../lib/api';
@@ -21,11 +21,24 @@ const statusLabels = {
 
 export function AuthorityDashboard({ incident, onClose, onUpdate }: AuthorityDashboardProps) {
   const { user } = useAuth();
+  const [detail, setDetail] = useState<IncidentWithJoins>(incident);
   const [newStatus, setNewStatus] = useState(incident.status);
   const [comment, setComment] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const full = await incidentsAPI.get(incident.id);
+        setDetail(full);
+      } catch (err) {
+        // silently ignore; keep basic incident
+      }
+    };
+    load();
+  }, [incident.id]);
 
   const handleUpdateStatus = async () => {
     if (!user) return;
@@ -35,7 +48,7 @@ export function AuthorityDashboard({ incident, onClose, onUpdate }: AuthorityDas
     setSuccess(false);
 
     try {
-      await incidentsAPI.update(incident.id, {
+      await incidentsAPI.update(detail.id, {
         status: newStatus,
         comment: comment.trim() || undefined,
       });
@@ -71,29 +84,29 @@ export function AuthorityDashboard({ incident, onClose, onUpdate }: AuthorityDas
             <div className="flex items-center gap-3 mb-4">
               <span
                 className="px-3 py-1 rounded-full text-sm font-semibold"
-                style={{ backgroundColor: (incident.category_color || '#3B82F6') + '20', color: incident.category_color || '#3B82F6' }}
+                style={{ backgroundColor: (detail.category_color || '#3B82F6') + '20', color: detail.category_color || '#3B82F6' }}
               >
-                {incident.category_name}
+                {detail.category_name}
               </span>
               <span className="px-3 py-1 rounded-full text-sm font-semibold bg-gray-100 text-gray-800">
-                Prioridad: {incident.priority.toUpperCase()}
+                Prioridad: {detail.priority.toUpperCase()}
               </span>
             </div>
-            <h3 className="text-xl font-bold text-gray-900 mb-2">{incident.title}</h3>
-            <p className="text-gray-600">{incident.description}</p>
+            <h3 className="text-xl font-bold text-gray-900 mb-2">{detail.title}</h3>
+            <p className="text-gray-600">{detail.description}</p>
           </div>
 
           <div className="grid md:grid-cols-2 gap-4">
             <div>
               <p className="text-sm text-gray-500 mb-1">Reportado por</p>
-              <p className="font-semibold">{incident.full_name}</p>
-              <p className="text-sm text-gray-600">{incident.email}</p>
+              <p className="font-semibold">{detail.full_name}</p>
+              <p className="text-sm text-gray-600">{detail.email}</p>
             </div>
 
             <div>
               <p className="text-sm text-gray-500 mb-1">Fecha del incidente</p>
               <p className="font-semibold">
-                {new Date(incident.incident_date).toLocaleDateString('es-ES', {
+                {new Date(detail.incident_date).toLocaleDateString('es-ES', {
                   year: 'numeric',
                   month: 'long',
                   day: 'numeric',
@@ -103,26 +116,26 @@ export function AuthorityDashboard({ incident, onClose, onUpdate }: AuthorityDas
               </p>
             </div>
 
-            {incident.address && (
+            {detail.address && (
               <div className="md:col-span-2">
                 <p className="text-sm text-gray-500 mb-1">Ubicación</p>
-                <p className="font-semibold">{incident.address}</p>
-                {incident.latitude && incident.longitude && (
+                <p className="font-semibold">{detail.address}</p>
+                {detail.latitude && detail.longitude && (
                   <p className="text-sm text-gray-600">
-                    Coordenadas: {incident.latitude}, {incident.longitude}
+                    Coordenadas: {detail.latitude}, {detail.longitude}
                   </p>
                 )}
               </div>
             )}
           </div>
 
-          {incident.images && incident.images.length > 0 && (
+          {detail.images && detail.images.length > 0 && (
             <div className="border-t pt-6">
               <h4 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
                 <ImageIcon className="w-5 h-5" /> Evidencias
               </h4>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                {incident.images.map((img) => (
+                {detail.images.map((img) => (
                   <img key={img.id} src={img.image_url} alt="evidencia" className="w-full h-32 object-cover rounded-lg border" />
                 ))}
               </div>
