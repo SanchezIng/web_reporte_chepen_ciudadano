@@ -12,13 +12,6 @@ interface AuthorityDashboardProps {
   onUpdate: () => void;
 }
 
-const statusLabels = {
-  pending: 'Pendiente',
-  in_progress: 'En Proceso',
-  resolved: 'Resuelta',
-  rejected: 'Rechazada',
-};
-
 export function AuthorityDashboard({ incident, onClose, onUpdate }: AuthorityDashboardProps) {
   const { user } = useAuth();
   const [detail, setDetail] = useState<IncidentWithJoins>(incident);

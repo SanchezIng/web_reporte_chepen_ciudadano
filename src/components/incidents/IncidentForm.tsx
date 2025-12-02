@@ -267,7 +267,10 @@ export function IncidentForm({ onSuccess }: IncidentFormProps) {
                 onChange={(e) => {
                   const files = Array.from(e.target.files || []);
                   setMediaFiles(files);
-                  const previews = files.map((f) => ({ url: URL.createObjectURL(f), type: f.type.startsWith('video') ? 'video' : 'image' }));
+                  const previews: { url: string; type: 'image' | 'video' }[] = files.map((f) => ({
+                    url: URL.createObjectURL(f),
+                    type: (f.type.startsWith('video') ? 'video' : 'image') as 'image' | 'video',
+                  }));
                   setMediaPreviews(previews);
                 }}
               />

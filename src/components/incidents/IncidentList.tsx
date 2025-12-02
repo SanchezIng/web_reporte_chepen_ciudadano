@@ -281,10 +281,11 @@ export function IncidentList({ onSelectIncident }: IncidentListProps) {
                   <p className="text-sm text-gray-600 mt-1">{incident.description.substring(0, 100)}...</p>
                 </div>
                 <div className="ml-4 flex flex-col items-end gap-2">
-                  {incident.first_image_url ? (
-                    <img src={incident.first_image_url} alt="evidencia" className="w-20 h-20 object-cover rounded" />
-                  ) : (
-                    incident.first_video_url ? (
+                  <div className="flex items-center gap-2">
+                    {incident.first_image_url && (
+                      <img src={incident.first_image_url} alt="evidencia" className="w-20 h-20 object-cover rounded" />
+                    )}
+                    {incident.first_video_url && (
                       <video
                         src={incident.first_video_url}
                         poster={getVideoPoster(incident.first_video_url)}
@@ -294,8 +295,8 @@ export function IncidentList({ onSelectIncident }: IncidentListProps) {
                         loop
                         playsInline
                       />
-                    ) : null
-                  )}
+                    )}
+                  </div>
                   <span
                     className={`inline-block px-2 py-1 rounded text-xs font-medium ${
                       statusColors[incident.status as keyof typeof statusColors]

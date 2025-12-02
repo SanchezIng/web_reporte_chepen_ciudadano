@@ -58,14 +58,15 @@ CREATE TABLE IF NOT EXISTS incident_images (
   INDEX idx_incident_id (incident_id)
 );
 
+DROP TABLE IF EXISTS incident_videos;
 CREATE TABLE IF NOT EXISTS incident_videos (
-  id VARCHAR(36) PRIMARY KEY,
-  incident_id VARCHAR(36) NOT NULL,
-  video_url VARCHAR(2000) NOT NULL,
+  id CHAR(36) PRIMARY KEY,
+  incident_id CHAR(36) NOT NULL,
+  video_url TEXT NOT NULL,
   uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (incident_id) REFERENCES incidents(id),
-  INDEX idx_incident_id_v (incident_id)
-);
+  INDEX idx_incident_id_v (incident_id),
+  CONSTRAINT fk_videos_incident FOREIGN KEY (incident_id) REFERENCES incidents(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE IF NOT EXISTS incident_updates (
   id VARCHAR(36) PRIMARY KEY,
