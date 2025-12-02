@@ -54,6 +54,10 @@ export const auth = {
     apiCall('/auth/register', { method: 'POST', body: data }),
   login: (data: { email: string; password: string }) =>
     apiCall('/auth/login', { method: 'POST', body: data }),
+  requestReset: (data: { email: string }) =>
+    apiCall('/auth/request-reset', { method: 'POST', body: data }),
+  resetPassword: (data: { token: string; new_password: string }) =>
+    apiCall('/auth/reset', { method: 'POST', body: data }),
 };
 
 export const profiles = {

@@ -82,6 +82,18 @@ CREATE TABLE IF NOT EXISTS incident_updates (
   INDEX idx_created_at (created_at)
 );
 
+CREATE TABLE IF NOT EXISTS password_resets (
+  id CHAR(36) PRIMARY KEY,
+  user_id CHAR(36) NOT NULL,
+  token VARCHAR(128) NOT NULL,
+  expires_at DATETIME NOT NULL,
+  used_at DATETIME,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_user_id_pr (user_id),
+  INDEX idx_token_pr (token),
+  FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 INSERT IGNORE INTO incident_categories (id, name, description, color) VALUES
 ('cat-001', 'Seguridad Vial', 'Accidentes y problemas de tráfico', '#EF4444'),
 ('cat-002', 'Servicios Públicos', 'Problemas con agua, luz, gas', '#F97316'),

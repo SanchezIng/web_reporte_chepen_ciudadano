@@ -36,8 +36,27 @@ export function ResetPasswordForm({ onSuccess }: ResetPasswordFormProps) {
       return;
     }
 
-    setError('Para restablecer tu contraseña, contacta con el administrador.');
-    setTimeout(() => onSuccess(), 2000);
+    const params = new URLSearchParams((window.location.hash.split('?')[1] || ''));
+    const token = params.get('token') || '';
+    if (!token) {
+      setError('Token de recuperación no encontrado');
+      return;
+    }
+    try {
+      await fetch((import.meta.env.VITE_API_URL || 'http://localhost:3000') + '/api/auth/reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, new_password: password }),
+      }).then(async (r) => {
+        if (!r.ok) {
+          const t = await r.text();
+          try { const j = JSON.parse(t); throw new Error(j.error || 'Error al restablecer'); } catch { throw new Error(t || 'Error al restablecer'); }
+        }
+      });
+      onSuccess();
+    } catch (e: any) {
+      setError(e.message || 'Error al restablecer la contraseña');
+    }
   };
 
   return (

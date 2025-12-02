@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Mail, ArrowLeft, AlertCircle } from 'lucide-react';
+import { auth } from '../../lib/api';
 
 interface ForgotPasswordFormProps {
   onBack: () => void;
@@ -9,14 +10,22 @@ export function ForgotPasswordForm({ onBack }: ForgotPasswordFormProps) {
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resetLink, setResetLink] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
 
-    setError('Para recuperar tu contraseña, contacta con el administrador del sistema.');
-    setLoading(false);
+    try {
+      const resp = await auth.requestReset({ email });
+      setResetLink(resp?.reset_url || '');
+      setError('Si el correo existe, se enviará un enlace de recuperación.');
+    } catch (e: any) {
+      setError(e.message || 'No se pudo solicitar la recuperación');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -41,6 +50,13 @@ export function ForgotPasswordForm({ onBack }: ForgotPasswordFormProps) {
           <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
             <p className="text-blue-800 text-sm">{error}</p>
+          </div>
+        )}
+        {resetLink && (
+          <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4 text-green-800 text-sm">
+            <a href={resetLink} className="underline" onClick={(e) => { e.preventDefault(); window.location.hash = resetLink.split('#')[1] || ''; }}>
+              Ir a restablecer contraseña
+            </a>
           </div>
         )}
 
