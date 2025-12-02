@@ -7,6 +7,8 @@ const user = process.env.SMTP_USER || '';
 const pass = process.env.SMTP_PASS || '';
 const from = process.env.MAIL_FROM || 'no-reply@example.com';
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
+const EMAIL_PROVIDER = (process.env.EMAIL_PROVIDER || '').toLowerCase();
+const RESEND_REPLY_TO = process.env.RESEND_REPLY_TO || user || undefined;
 
 const transporter = nodemailer.createTransport({
   host,
@@ -24,7 +26,19 @@ const transporter = nodemailer.createTransport({
 export async function sendMail(to: string, subject: string, html: string) {
   if (!host && !RESEND_API_KEY) return false;
   try {
-    if (host) {
+    if (EMAIL_PROVIDER === 'resend' && RESEND_API_KEY) {
+      const resp = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${RESEND_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ from, to, subject, html, reply_to: RESEND_REPLY_TO }),
+      });
+      if (resp.ok) return true;
+      const t = await resp.text();
+      console.error('Resend error:', t);
+    } else if (host) {
       await transporter.sendMail({ from, to, subject, html });
       return true;
     }
@@ -39,7 +53,7 @@ export async function sendMail(to: string, subject: string, html: string) {
           Authorization: `Bearer ${RESEND_API_KEY}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ from, to, subject, html }),
+        body: JSON.stringify({ from, to, subject, html, reply_to: RESEND_REPLY_TO }),
       });
       if (resp.ok) return true;
       const t = await resp.text();
