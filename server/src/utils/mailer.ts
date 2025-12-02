@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import { google } from 'googleapis';
 
 const host = process.env.SMTP_HOST || '';
 const port = parseInt(process.env.SMTP_PORT || '587');
@@ -9,6 +10,10 @@ const from = process.env.MAIL_FROM || 'no-reply@example.com';
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const EMAIL_PROVIDER = (process.env.EMAIL_PROVIDER || '').toLowerCase();
 const RESEND_REPLY_TO = process.env.RESEND_REPLY_TO || user || undefined;
+const GMAIL_USER = process.env.GMAIL_USER || user || '';
+const GMAIL_CLIENT_ID = process.env.GMAIL_CLIENT_ID || '';
+const GMAIL_CLIENT_SECRET = process.env.GMAIL_CLIENT_SECRET || '';
+const GMAIL_REFRESH_TOKEN = process.env.GMAIL_REFRESH_TOKEN || '';
 
 const transporter = nodemailer.createTransport({
   host,
@@ -38,6 +43,21 @@ export async function sendMail(to: string, subject: string, html: string) {
       if (resp.ok) return true;
       const t = await resp.text();
       console.error('Resend error:', t);
+    } else if (EMAIL_PROVIDER === 'gmail_api' && GMAIL_CLIENT_ID && GMAIL_CLIENT_SECRET && GMAIL_REFRESH_TOKEN && GMAIL_USER) {
+      const oAuth2Client = new google.auth.OAuth2(GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET);
+      oAuth2Client.setCredentials({ refresh_token: GMAIL_REFRESH_TOKEN });
+      const accessTokenObj = await oAuth2Client.getAccessToken();
+      const accessToken = typeof accessTokenObj === 'string' ? accessTokenObj : accessTokenObj.token || '';
+      const raw = Buffer.from(
+        `From: ${GMAIL_USER}\nTo: ${to}\nSubject: ${subject}\nReply-To: ${RESEND_REPLY_TO || GMAIL_USER}\nContent-Type: text/html; charset=utf-8\n\n${html}`
+      )
+        .toString('base64')
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
+      const gmail = google.gmail({ version: 'v1', auth: oAuth2Client });
+      await gmail.users.messages.send({ userId: 'me', requestBody: { raw } });
+      return true;
     } else if (host) {
       await transporter.sendMail({ from, to, subject, html });
       return true;
