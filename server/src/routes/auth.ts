@@ -115,7 +115,9 @@ router.post('/request-reset', async (req: Request, res: Response) => {
     const frontend = process.env.FRONTEND_URL || (process.env.FRONTEND_URLS || 'http://localhost:5173').split(',')[0];
     const resetUrl = `${frontend.replace(/\/$/, '')}/#/auth/reset?token=${token}`;
     if (user) {
-      await sendMail(email, 'Recupera tu contraseña', `<p>Solicitaste restablecer tu contraseña.</p><p><a href="${resetUrl}">Haz clic aquí para continuar</a></p><p>Si no fuiste tú, ignora este mensaje.</p>`);
+      try {
+        await sendMail(email, 'Recupera tu contraseña', `<p>Solicitaste restablecer tu contraseña.</p><p><a href="${resetUrl}">Haz clic aquí para continuar</a></p><p>Si no fuiste tú, ignora este mensaje.</p>`);
+      } catch {}
     }
     res.json({ success: true, reset_url: resetUrl });
   } catch (error) {

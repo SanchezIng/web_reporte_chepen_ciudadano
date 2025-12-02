@@ -12,9 +12,21 @@ const transporter = nodemailer.createTransport({
   port,
   secure,
   auth: user ? { user, pass } : undefined,
+  pool: true,
+  maxConnections: 3,
+  maxMessages: 100,
+  connectionTimeout: parseInt(process.env.SMTP_CONN_TIMEOUT || '10000'),
+  socketTimeout: parseInt(process.env.SMTP_SOCKET_TIMEOUT || '10000'),
+  greetingTimeout: parseInt(process.env.SMTP_GREET_TIMEOUT || '10000'),
 });
 
 export async function sendMail(to: string, subject: string, html: string) {
-  if (!host) return;
-  await transporter.sendMail({ from, to, subject, html });
+  if (!host) return false;
+  try {
+    await transporter.sendMail({ from, to, subject, html });
+    return true;
+  } catch (err) {
+    console.error('SMTP send error:', err);
+    return false;
+  }
 }
